@@ -28,7 +28,7 @@ A2XH=a2x -f xhtml --no-xmllint -a encoding=UTF-8
 # the title of the page and should not contain a href.
 CROSSLINK=sed -i '' '1,3!s/\([[:alnum:]_-]*\)(\([17]\))/<a href="..\/man\2\/\1.html">&<\/a>/g'
 helper=./bin/build-helper
-
+# test
 MANDIR=docs/man
 SPEECHDIR=docs/speeches
 TYPEDIR=cdist/conf/type
