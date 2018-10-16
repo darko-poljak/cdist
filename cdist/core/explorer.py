@@ -186,11 +186,92 @@ class Explorer(object):
         self.log.trace("Transfering object parameters for object: %s",
                        cdist_object.name)
         self.transfer_object_parameters(cdist_object)
+        cdist_type = cdist_object.cdist_type
+        explorer_abs_remote_path = os.path.join(self.remote.type_path,
+                                                cdist_type.explorer_path)
+        object_explorer_abs_local_path = os.path.join(
+            cdist_object.base_path, cdist_object.explorer_path)
+        exec_script_local_path = os.path.join(object_explorer_abs_local_path,
+                                              'exec_script')
+        exec_script_remote_path = os.path.join(explorer_abs_remote_path,
+                                               'exec_script')
+        exec_script = ['#!/bin/sh', ]
+        remote_files_for_transfer = []
+        self.log.trace("Generating exec script for %s type explorers",
+                       cdist_object.cdist_type)
+        wait_cmds = []
         for explorer in self.list_type_explorer_names(cdist_object.cdist_type):
-            output = self.run_type_explorer(explorer, cdist_object)
-            self.log.trace("Running type explorer '%s' for object '%s'",
-                           explorer, cdist_object.name)
-            cdist_object.explorers[explorer] = output
+            script = os.path.join(explorer_abs_remote_path, explorer)
+            exec_script.append('{')
+            stdout_path = os.path.join(explorer_abs_remote_path,
+                                       explorer + '_stdout')
+            stderr_path = os.path.join(explorer_abs_remote_path,
+                                       explorer + '_stderr')
+            exec_script.append('{} 1> {} 2> {}'.format(
+                               script, stdout_path, stderr_path))
+            exit_code_path = os.path.join(explorer_abs_remote_path,
+                                          explorer + '_exit_code')
+            exec_script.append('printf "$?" > {}'.format(exit_code_path))
+            exec_script.append('} &')
+            pidvar = 'pid_' + explorer
+            exec_script.append(pidvar + '=$!')
+            wait_cmds.append(pidvar)
+            remote_files_for_transfer.append(stdout_path)
+            remote_files_for_transfer.append(stderr_path)
+            remote_files_for_transfer.append(exit_code_path)
+        for wait in wait_cmds:
+            exec_script.append('wait $' + wait)
+        exec_script.append('')  # for beautiful newline at the end of file
+        with open(exec_script_local_path, 'w') as f:
+            f.write("\n".join(exec_script))
+        self.log.trace("Generated exec script %s for %s type explorers",
+                       exec_script_local_path, cdist_object.cdist_type)
+        self.log.trace("Transferring exec script %s for %s type explorers",
+                       exec_script_local_path, cdist_object.cdist_type)
+        self.remote.transfer(exec_script_local_path, exec_script_remote_path)
+        self.remote.run(["chmod", "0700", "{}".format(
+            exec_script_remote_path)])
+        self.log.trace("Running exec script for type explorers for object: %s",
+                       cdist_object.name)
+        self.run_type_explorers_exec_script(cdist_object,
+                                            exec_script_remote_path)
+        self.remote.transfer_files_from_remote(remote_files_for_transfer,
+                                               object_explorer_abs_local_path)
+        for explorer in self.list_type_explorer_names(cdist_object.cdist_type):
+            exit_code_path = os.path.join(object_explorer_abs_local_path,
+                                          explorer + '_exit_code')
+            stdout_path = os.path.join(object_explorer_abs_local_path,
+                                       explorer + '_stdout')
+            stderr_path = os.path.join(object_explorer_abs_local_path,
+                                       explorer + '_stderr')
+            with open(exit_code_path, 'r') as f:
+                exit_code = f.read().strip()
+            print("exit code: ", type(exit_code))
+            if exit_code == '0':
+                with open(stdout_path, 'r') as f:
+                    output = f.read()
+                    cdist_object.explorers[explorer] = output
+            else:
+                with open(stderr_path, 'r') as f:
+                    output = f.read()
+                    raise cdist.Error("Explorer {} failed: {}".format(
+                        explorer, output))
+
+    def run_type_explorers_exec_script(self, cdist_object,
+                                       exec_script_remote_path):
+        cdist_type = cdist_object.cdist_type
+        env = self.env.copy()
+        env.update({
+            '__object': os.path.join(self.remote.object_path,
+                                     cdist_object.path),
+            '__object_id': cdist_object.object_id,
+            '__object_name': cdist_object.name,
+            '__object_fq': cdist_object.path,
+            '__type_explorer': os.path.join(self.remote.type_path,
+                                            cdist_type.explorer_path)
+        })
+        return self.remote.run_script_no_e(exec_script_remote_path, env=env,
+                                           return_output=False)
 
     def run_type_explorer(self, explorer, cdist_object):
         """Run the given type explorer for the given object and return

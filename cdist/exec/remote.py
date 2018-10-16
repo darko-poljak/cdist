@@ -24,12 +24,10 @@ import os
 import glob
 import subprocess
 import logging
-import multiprocessing
 
 import cdist
 import cdist.exec.util as util
 import cdist.util.ipaddr as ipaddr
-from cdist.mputil import mp_pool_run
 
 
 def _wrap_addr(addr):
@@ -162,6 +160,21 @@ class Remote(object):
             _wrap_addr(self.target_host[0]), destination)])
         self._run_command(command)
 
+    def transfer_file_from_remote(self, source, destination):
+        command = self._copy.split()
+        command.extend(['{0}:{1}'.format(
+            _wrap_addr(self.target_host[0]), source),
+            destination])
+        self._run_command(command)
+
+    def transfer_files_from_remote(self, source_list, destination):
+        command = self._copy.split()
+        for source in source_list:
+            command.extend(['{0}:{1}'.format(
+                _wrap_addr(self.target_host[0]), source), ])
+        command.append(destination)
+        self._run_command(command)
+
     def transfer(self, source, destination, jobs=None):
         """Transfer a file or directory to the remote side."""
         self.log.trace("Remote transfer: %s -> %s", source, destination)
@@ -218,6 +231,13 @@ class Remote(object):
             _wrap_addr(self.target_host[0]), destination)])
         self._run_command(command)
 
+    def transfer_dir_from_remote(self, source, destination):
+        command = self._copy.split()
+        command.extend(['{0}:{1}'.format(
+            _wrap_addr(self.target_host[0]), os.path.join(source, '*')),
+            destination])
+        self._run_command(command)
+
     def run_script(self, script, env=None, return_output=False, stdout=None,
                    stderr=None):
         """Run the given script with the given environment on the remote side.
@@ -228,6 +248,21 @@ class Remote(object):
         command = [
             self.configuration.get('remote_shell', "/bin/sh"),
             "-e"
+        ]
+        command.append(script)
+
+        return self.run(command, env=env, return_output=return_output,
+                        stdout=stdout, stderr=stderr)
+
+    def run_script_no_e(self, script, env=None, return_output=False,
+                        stdout=None, stderr=None):
+        """Run the given script with the given environment on the remote side.
+        Return the output as a string.
+
+        """
+
+        command = [
+            self.configuration.get('remote_shell', "/bin/sh"),
         ]
         command.append(script)
 
