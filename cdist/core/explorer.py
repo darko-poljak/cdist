@@ -112,6 +112,7 @@ class Explorer(object):
         remote_files_for_transfer = []
         self.log.trace("Generating exec script for global explorers")
         wait_cmds = []
+        idx = 0
         for explorer in self.list_global_explorer_names():
             script = os.path.join(self.remote.global_explorer_path, explorer)
             exec_script.append('{')
@@ -125,7 +126,8 @@ class Explorer(object):
                                           explorer + '_exit_code')
             exec_script.append('printf "$?" > {}'.format(exit_code_path))
             exec_script.append('} &')
-            pidvar = 'pid_' + explorer
+            pidvar = 'pid_{}'.format(idx)
+            idx += 1
             exec_script.append(pidvar + '=$!')
             wait_cmds.append(pidvar)
             remote_files_for_transfer.append(stdout_path)
@@ -258,6 +260,7 @@ class Explorer(object):
         self.log.trace("Generating exec script for %s type explorers",
                        cdist_object.cdist_type)
         wait_cmds = []
+        idx = 0
         for explorer in self.list_type_explorer_names(cdist_object.cdist_type):
             script = os.path.join(explorer_abs_remote_path, explorer)
             exec_script.append('{')
@@ -271,7 +274,8 @@ class Explorer(object):
                                           explorer + '_exit_code')
             exec_script.append('printf "$?" > {}'.format(exit_code_path))
             exec_script.append('} &')
-            pidvar = 'pid_' + explorer
+            pidvar = 'pid_{}'.format(idx)
+            idx += 1
             exec_script.append(pidvar + '=$!')
             wait_cmds.append(pidvar)
             remote_files_for_transfer.append(stdout_path)
