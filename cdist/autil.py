@@ -69,3 +69,7 @@ def tar(source, mode="tgz"):
         else:
             tar.add(source)
     return tarpath, fcnt
+
+def untar(tarpath, destination):
+    with tarfile.open(tarpath, 'r') as tar:
+        tar.extractall(destination)

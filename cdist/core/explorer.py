@@ -25,6 +25,7 @@ import os
 import glob
 import multiprocessing
 import cdist
+import cdist.autil as autil
 from cdist.mputil import mp_pool_run
 from . import util
 
@@ -148,8 +149,15 @@ class Explorer(object):
         self.log.trace("Running exec script for global explorers")
         self.remote.run_script_no_e(exec_script_remote_path, env=self.env,
                                     return_output=False)
-        self.remote.transfer_files_from_remote(
-            remote_files_for_transfer, out_path)
+        archive_file_remote_path = os.path.join(
+            self.remote.conf_path, "explorer.tar")
+        self.remote.create_archive(self.remote.global_explorer_path,
+                                   archive_file_remote_path)
+        self.remote.transfer_file_from_remote(
+            archive_file_remote_path, out_path)
+        archive_file_local_path = os.path.join(out_path, "explorer.tar")
+        autil.untar(archive_file_local_path, out_path)
+        os.remove(archive_file_local_path)
         for explorer in self.list_global_explorer_names():
             exit_code_path = os.path.join(out_path, explorer + '_exit_code')
             stdout_path = os.path.join(out_path, explorer + '_stdout')
@@ -297,8 +305,16 @@ class Explorer(object):
                        cdist_object.name)
         self.run_type_explorers_exec_script(cdist_object,
                                             exec_script_remote_path)
-        self.remote.transfer_files_from_remote(remote_files_for_transfer,
-                                               object_explorer_abs_local_path)
+        archive_file_remote_path = os.path.join(self.remote.type_path,
+                                                "explorer.tar")
+        self.remote.create_archive(explorer_abs_remote_path,
+                                   archive_file_remote_path)
+        self.remote.transfer_file_from_remote(archive_file_remote_path,
+                                              object_explorer_abs_local_path)
+        archive_file_local_path = os.path.join(object_explorer_abs_local_path,
+                                               "explorer.tar")
+        autil.untar(archive_file_local_path, object_explorer_abs_local_path)
+        os.remove(archive_file_local_path)
         for explorer in self.list_type_explorer_names(cdist_object.cdist_type):
             exit_code_path = os.path.join(object_explorer_abs_local_path,
                                           explorer + '_exit_code')

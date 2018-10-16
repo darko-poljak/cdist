@@ -154,6 +154,16 @@ class Remote(object):
         command.append(path)
         self.run(command)
 
+    def create_archive(self, path, archive_file_path):
+        self.log.trace("Remote create archive %s for path: %s",
+                       archive_file_path, path)
+        command = ["tar", "-c", "-C", ]
+        command.append(path)
+        command.append("-f")
+        command.append(archive_file_path)
+        command.append(".")
+        self.run(command)
+
     def _transfer_file(self, source, destination):
         command = self._copy.split()
         command.extend([source, '{0}:{1}'.format(
