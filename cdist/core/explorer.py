@@ -103,10 +103,68 @@ class Explorer(object):
         """
         self.log.verbose("Running global explorers")
         self.transfer_global_explorers()
-        if self.jobs is None:
-            self._run_global_explorers_seq(out_path)
-        else:
-            self._run_global_explorers_parallel(out_path)
+
+        exec_script_local_path = os.path.join(out_path, 'exec_script')
+        exec_script_remote_path = os.path.join(
+            self.remote.global_explorer_path, 'exec_script')
+
+        exec_script = ['#!/bin/sh', ]
+        remote_files_for_transfer = []
+        self.log.trace("Generating exec script for global explorers")
+        wait_cmds = []
+        for explorer in self.list_global_explorer_names():
+            script = os.path.join(self.remote.global_explorer_path, explorer)
+            exec_script.append('{')
+            stdout_path = os.path.join(self.remote.global_explorer_path,
+                                       explorer + '_stdout')
+            stderr_path = os.path.join(self.remote.global_explorer_path,
+                                       explorer + '_stderr')
+            exec_script.append('{} 1> {} 2> {}'.format(
+                               script, stdout_path, stderr_path))
+            exit_code_path = os.path.join(self.remote.global_explorer_path,
+                                          explorer + '_exit_code')
+            exec_script.append('printf "$?" > {}'.format(exit_code_path))
+            exec_script.append('} &')
+            pidvar = 'pid_' + explorer
+            exec_script.append(pidvar + '=$!')
+            wait_cmds.append(pidvar)
+            remote_files_for_transfer.append(stdout_path)
+            remote_files_for_transfer.append(stderr_path)
+            remote_files_for_transfer.append(exit_code_path)
+        for wait in wait_cmds:
+            exec_script.append('wait $' + wait)
+        exec_script.append('')  # for beautiful newline at the end of file
+        with open(exec_script_local_path, 'w') as f:
+            f.write("\n".join(exec_script))
+        self.log.trace("Generated exec script %s for global explorers",
+                       exec_script_local_path)
+        self.log.trace("Transferring exec script %s for global explorers",
+                       exec_script_local_path)
+        self.remote.transfer(exec_script_local_path, exec_script_remote_path)
+        self.remote.run(["chmod", "0700", "{}".format(
+            exec_script_remote_path)])
+        self.log.trace("Running exec script for global explorers")
+        self.remote.run_script_no_e(exec_script_remote_path, env=self.env,
+                                    return_output=False)
+        self.remote.transfer_files_from_remote(
+            remote_files_for_transfer, out_path)
+        for explorer in self.list_global_explorer_names():
+            exit_code_path = os.path.join(out_path, explorer + '_exit_code')
+            stdout_path = os.path.join(out_path, explorer + '_stdout')
+            stderr_path = os.path.join(out_path, explorer + '_stderr')
+            with open(exit_code_path, 'r') as f:
+                exit_code = f.read().strip()
+            if exit_code == '0':
+                with open(stdout_path, 'r') as f:
+                    output = f.read()
+                    path = os.path.join(out_path, explorer)
+                    with open(path, 'w') as fd:
+                        fd.write(output)
+            else:
+                with open(stderr_path, 'r') as f:
+                    output = f.read()
+                    raise cdist.Error("Global explorer {} failed: {}".format(
+                        explorer, output))
 
     def _run_global_explorer(self, explorer, out_path):
         output = self.run_global_explorer(explorer)
@@ -246,7 +304,6 @@ class Explorer(object):
                                        explorer + '_stderr')
             with open(exit_code_path, 'r') as f:
                 exit_code = f.read().strip()
-            print("exit code: ", type(exit_code))
             if exit_code == '0':
                 with open(stdout_path, 'r') as f:
                     output = f.read()
