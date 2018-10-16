@@ -169,9 +169,8 @@ class Remote(object):
 
     def transfer_files_from_remote(self, source_list, destination):
         command = self._copy.split()
-        for source in source_list:
-            command.extend(['{0}:{1}'.format(
-                _wrap_addr(self.target_host[0]), source), ])
+        command.extend(['{0}:{1}'.format(
+            _wrap_addr(self.target_host[0]), " ".join(source_list)), ])
         command.append(destination)
         self._run_command(command)
 
