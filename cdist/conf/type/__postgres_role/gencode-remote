@@ -54,8 +54,8 @@ case "$state_should" in
 
         [ -n "$password" ] && password="PASSWORD '$password'"
 
-        cmd="CREATE ROLE $name WITH $password $booleans"
-        echo "su - '$postgres_user' -c \"psql postgres -c '$cmd'\""
+        printf "su - '%s' -c \"psql postgres -c \\\\\"CREATE ROLE %s WITH %s %s\\\\\"\"\n" \
+            "$postgres_user" "$name" "$password" "$booleans"
     ;;
     absent)
         echo "su - '$postgres_user' -c \"dropuser '$name'\""
